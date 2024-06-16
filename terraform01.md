@@ -327,4 +327,348 @@ output "cluster_name" {
 }
 
 output "kubeconfig" {
+    value = module.eks_spoke.kubeconfig
+}
+```
+
+#### kubernetes/spoke-clusters/staging/backend.tf
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-states"
+    key            = "kubernetes/spoke-clusters/staging/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+#### kubernetes/spoke-clusters/development/main.tf
+
+```hcl
+provider "aws" {
+  region = var.region
+}
+
+provider "kubernetes" {
+  config_path = "~/.kube/config"
+}
+
+module "eks_spoke" {
+  source          = "terraform-aws-modules/eks/aws"
+  cluster_name    = "development-cluster"
+  cluster_version = "1.21"
+  subnets         = var.private_subnets
+  vpc_id          = var.vpc_id
+
+  node_groups = {
+    development-cluster-nodes = {
+      desired_capacity = 2
+      max_capacity     = 3
+      min_capacity     = 1
+
+      instance_type = "t3.medium"
+    }
+  }
+}
+```
+
+#### kubernetes/spoke-clusters/development/variables.tf
+
+```hcl
+variable "region" {
+  description = "AWS region"
+  default     = "us-west-2"
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "private_subnets" {
+  description = "Private subnets"
+  type        = list(string)
+}
+```
+
+#### kubernetes/spoke-clusters/development/outputs.tf
+
+```hcl
+output "cluster_name" {
+  value = module.eks_spoke.cluster_id
+}
+
+output "kubeconfig" {
+  value = module.eks_spoke.kubeconfig
+}
+```
+
+#### kubernetes/spoke-clusters/development/backend.tf
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-states"
+    key            = "kubernetes/spoke-clusters/development/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+#### kubernetes/spoke-clusters/production/main.tf
+
+```hcl
+provider "aws" {
+  region = var.region
+}
+
+provider "kubernetes" {
+  config_path = "~/.kube/config"
+}
+
+module "eks_spoke" {
+  source          = "terraform-aws-modules/eks/aws"
+  cluster_name    = "production-cluster"
+  cluster_version = "1.21"
+  subnets         = var.private_subnets
+  vpc_id          = var.vpc_id
+
+  node_groups = {
+    production-cluster-nodes = {
+      desired_capacity = 2
+      max_capacity     = 3
+      min_capacity     = 1
+
+      instance_type = "t3.medium"
+    }
+  }
+}
+```
+
+#### kubernetes/spoke-clusters/production/variables.tf
+
+```hcl
+variable "region" {
+  description = "AWS region"
+  default     = "us-west-2"
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "private_subnets" {
+  description = "Private subnets"
+  type        = list(string)
+}
+```
+
+#### kubernetes/spoke-clusters/production/outputs.tf
+
+```hcl
+output "cluster_name" {
+  value = module.eks_spoke.cluster_id
+}
+
+output "kubeconfig" {
+  value = module.eks_spoke.kubeconfig
+}
+```
+
+#### kubernetes/spoke-clusters/production/backend.tf
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-states"
+    key            = "kubernetes/spoke-clusters/production/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+#### kubernetes/monitoring/main.tf
+
+```hcl
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
+}
+
+resource "helm_release" "prometheus" {
+  name       = "prometheus"
+  namespace  = "monitoring"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "kube-prometheus-stack"
+  version    = "16.12.2"
+}
+
+resource "helm_release" "grafana" {
+  name       = "grafana"
+  namespace  = "monitoring"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "grafana"
+  version    = "6.17.4"
+
+  set {
+    name  = "adminPassword"
+    value = "admin"
+  }
+}
+
+resource "helm_release" "loki" {
+  name       = "loki"
+  namespace  = "monitoring"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "loki-stack"
+  version    = "2.5.0"
+}
+
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+}
+```
+
+#### kubernetes/monitoring/variables.tf
+
+```hcl
+variable "region" {
+  description = "AWS region"
+  default     = "us-west-2"
+}
+```
+
+#### kubernetes/monitoring/outputs.tf
+
+```hcl
+output "prometheus_url" {
+  value = helm_release.prometheus.status.endpoint[0]
+}
+
+output "grafana_url" {
+  value = helm_release.grafana.status.endpoint[0]
+}
+
+output "loki_url" {
+  value = helm_release.loki.status.endpoint[0]
+}
+```
+
+#### kubernetes/monitoring/backend.tf
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-states"
+    key            = "kubernetes/monitoring/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+#### kubernetes/argocd/main.tf
+
+```hcl
+provider "helm" {
+  kubernetes {
+    config_path = "~/.kube/config"
+  }
+}
+
+resource "helm_release" "argo_cd" {
+  name       = "argo-cd"
+  namespace  = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = "3.23.0"
+
+  set {
+    name  = "server.service.type"
+    value = "LoadBalancer"
+  }
+
+  set {
+    name  = "installCRDs"
+    value = "true"
+  }
+}
+
+resource "kubernetes_namespace" "argocd" {
+  metadata {
+    name = "argocd"
+  }
+}
+```
+
+#### kubernetes/argocd/variables.tf
+
+```hcl
+variable "region" {
+  description = "AWS region"
+  default     = "us-west-2"
+}
+```
+
+#### kubernetes/argocd/outputs.tf
+
+```hcl
+output "argo_cd_url" {
+  value = helm_release.argo_cd.status.endpoint[0]
+}
+```
+
+#### kubernetes/argocd/backend.tf
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-states"
+    key            = "kubernetes/argocd/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}
+```
+
+### Summary
+
+This structure separates the infrastructure setup from the Kubernetes cluster setup and uses Terraform workspaces and remote state management to handle different environments (staging, development, production).
+
+To deploy the infrastructure, navigate to the `infrastructure` directory and run:
+
+```sh
+terraform init
+terraform apply
+```
+
+To deploy the Kubernetes clusters, navigate to the appropriate directories (`app-cluster`, `spoke-clusters/staging`, `spoke-clusters/development`, `spoke-clusters/production`) and run:
+
+```sh
+terraform init
+terraform workspace new <workspace-name>  # e.g., "staging", "development", "production"
+terraform apply
+```
+
+Finally, navigate to the `monitoring` and `argocd` directories to deploy the monitoring tools and Argo CD:
+
+```sh
+terraform init
+terraform apply
+```
+
+This approach ensures that your infrastructure and Kubernetes clusters are managed independently, allowing for better organization and maintainability. If you need further adjustments or additional details, let me know!
  
