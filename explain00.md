@@ -184,3 +184,63 @@ Here:
 - The `for` loop iterates over `local.azs`, using `k` as the `netnum` to generate unique subnets for each AZ.
 - By changing `newbits` and `netnum`, you control the size and specific selection of subnets within the base CIDR block.
 
+
+
+
+
+
+
+The choice of `48` in the `netnum` parameter for the public subnets is a strategic one. Here's a detailed explanation:
+
+### Understanding the Context
+In Terraform, when defining subnets within a VPC, you might want to separate them into private and public subnets. These subnets should not overlap, and they need to be in different ranges.
+
+### Example: Breaking Down the VPC CIDR
+Suppose you have a VPC with the CIDR block `10.0.0.0/16`. This gives you an address space of `10.0.0.0` to `10.0.255.255`.
+
+### Creating Subnets
+1. **Private Subnets**:
+   - `cidrsubnet(local.vpc_cidr, 4, k)`:
+     - Adding 4 bits to the `/16` prefix extends it to `/20`.
+     - This gives you `16` subnets (`2^4 = 16`).
+     - The `netnum` `k` selects one of these subnets.
+     - For example:
+       - `k = 0` → `10.0.0.0/20`
+       - `k = 1` → `10.0.16.0/20`
+       - `k = 2` → `10.0.32.0/20`
+       - And so on up to `k = 15`.
+
+2. **Public Subnets**:
+   - `cidrsubnet(local.vpc_cidr, 8, k + 48)`:
+     - Adding 8 bits to the `/16` prefix extends it to `/24`.
+     - This gives you `256` subnets (`2^8 = 256`).
+     - The `netnum` `k + 48` selects one of these subnets.
+     - The key here is the `48` offset.
+
+### Why `48`?
+- The `48` offset ensures that the public subnets do not overlap with the private subnets.
+- The private subnets are using the first few subnets (determined by `netnum = k` where `k` is the index).
+- By starting the public subnets at `netnum = k + 48`, you ensure there's a significant gap between the ranges of private and public subnets.
+
+### Ensuring Non-Overlapping Subnets
+- **Private Subnets** (for 3 AZs, `k = 0, 1, 2`):
+  - `10.0.0.0/20`
+  - `10.0.16.0/20`
+  - `10.0.32.0/20`
+- **Public Subnets** (for 3 AZs, `k = 0, 1, 2` with `k + 48`):
+  - `10.0.192.0/24`
+  - `10.0.193.0/24`
+  - `10.0.194.0/24`
+
+### Why Choose 48 Specifically?
+- Choosing `48` places the public subnets in a higher range, ensuring there's no overlap with the private subnets, which are in the lower range.
+- This choice is somewhat arbitrary but logical, ensuring a clear separation between the subnet ranges.
+- The number `48` is chosen based on the layout and the required number of subnets, ensuring enough address space remains for other subnets and avoiding conflicts.
+
+### Flexibility
+- The exact value of `48` can be adjusted based on your specific subnetting needs.
+- The key is to ensure that the `netnum` values for public and private subnets do not overlap, thus maintaining distinct and non-conflicting address spaces within the VPC.
+
+By using `48`, you effectively allocate the first 48 subnets (0-47) for other purposes or future use, and start the public subnets at a later range, ensuring they are well-separated from the private subnets.
+
+
